@@ -1,0 +1,65 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+rm(list=ls())
+
+setwd("/Users/franciscorowe/Dropbox/Francisco/Research/github_projects/dataviz_res/")
+```
+
+libraries
+```{r}
+library(tidyverse)
+
+source("corr_graph.R")
+```
+
+
+```{r}
+df <- read_csv("data_corr_graph.csv")
+glimpse(df)
+```
+```{r}
+as_tibble(cor(df)) %>%
+  print(n = 3)
+```
+Correlations with a magnitude of 0.5 or greater than 0.5:
+
+```{r}
+corr_graph(df, output = "jpeg", filename = "graph1")
+```
+
+Correlation of 0.75 or greater
+```{r}
+p2 <- corr_graph(df, r.cut.off = 0.75, output = "bmp")
+```
+
+magnitude of the correlation but whether it is significant at, say, a 99% confidence or greater
+```{r}
+corr_graph(df, alpha.cut.off = 0.01, output = "png", use.significance = TRUE, filename = "sig_99")
+```
+
+
+```{r}
+corr_graph(df, layout = "layout_on_grid",
+           scale.vertex = TRUE,
+           vertex.cex = 3, margin = 0.5)
+```
+
+
+```{r}
+orr_graph(df, vertex.cex = 5,
+           scale.vertex = TRUE,
+           border = "dark grey", omit.rest = FALSE)
+```
+
+
+
+
+
+
+
+
+

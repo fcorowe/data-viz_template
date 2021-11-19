@@ -1,0 +1,45 @@
+---
+title: "Flow Data Visualisation: Hovmöller"
+author: "Francisco Rowe"
+output: html_notebook
+---
+
+Dependencies 
+```{r}
+library(tidyverse)
+library(viridis)
+library(viridisLite)
+```
+
+```{r}
+df <- readRDS("/Users/Franciscorowe 1/Dropbox/Francisco/Research/in_progress/mig_covid_spain/data/matrix.rds")
+summary(df)
+```
+```{r}
+ggplot(data = filter(df, Year=="2020")) +
+geom_density(alpha=0.8, colour="black", fill="lightblue", aes(x = Tasa)) +
+  theme_minimal() 
+```
+
+```{r}
+rdf<- filter(df, Year=="2020" & Tasa > 0)
+```
+
+
+
+```{r}
+ggplot(data = rdf, 
+       mapping = aes(x = reorder(To, pop), y = From, fill = Tasa)) +
+  geom_tile() +
+  scale_fill_viridis(name="migration rate", option ="plasma", begin = 0, end = 1, direction = 1) +
+  theme_minimal() +
+  labs(title= paste(" "), x="Destination", y="Origin") +
+  theme(axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.ticks.y=element_blank(),
+        axis.text.y=element_blank())
+  
+```
+
+
+

@@ -1,10 +1,4 @@
-# Templates for Data Visualisation in R
-
-This repository contains templates to create different forms of data visualisations:
-
-* Maps. 
-* Plots. 
-* Correlograms  
+# dataviz_res
 
 [Stacking maps](https://urbandemographics.blogspot.com/2016/04/creating-tilted-and-stacked-maps-in-r.html)
 

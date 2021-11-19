@@ -1,0 +1,178 @@
+---
+title: "Choropleths Using ggplot"
+author: "Francisco Rowe ([`@fcorowe`](http://twitter.com/fcorowe))"
+date: "`r Sys.Date()`"
+output: tint::tintHtml
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+library(tint)
+# handle spatial data
+library(sf)
+# manipulate data
+library(tidyverse)
+library(lubridate)
+# create maps
+library(tmap)
+# nice colour schemes
+library(viridis) 
+library(viridisLite)
+library(RColorBrewer)
+library(ggthemes)
+library(scico)
+library(patchwork)
+# invalidate cache when the package version changes
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tint'))
+options(htmltools.dir.version = FALSE)
+```
+
+
+# Choropleths
+
+# Data
+
+We will use [internal migration data](https://www.ons.gov.uk/peoplepopulationandcommunity/populationandmigration/migrationwithintheuk/datasets/internalmigrationbyoriginanddestinationlocalauthoritiessexandsingleyearofagedetailedestimatesdataset) from the Office for National Statistics (ONS) from the United Kingdom. 
+
+The original data are organised in a long format structure and are disaggregated by sex and age. Each row captures the count of people moving from an origin to a destination. The spatial units of analysis are local authorities (LA).
+
+```{r}
+# clean workspace
+rm(list=ls())
+
+# load data
+df_long <- read_csv("../data/internal_migration/Detailed_Estimates_2020_LA_2021_Dataset_1.csv")
+
+# id for origins and destinations
+orig_la_nm <- as.data.frame(unique(df_long$OutLA))
+dest_la_nm <- as.data.frame(unique(df_long$InLA))
+
+head(df_long)
+```
+We also read our LA boundaries and analyse the structure of the data. We use open data from the ONS's Geography portal. We use the [Local Authority Districts Boundaries (May 2021) UK BFE](https://geoportal.statistics.gov.uk/datasets/ons::local-authority-districts-may-2021-uk-bfe/about)
+
+```{r}
+# read shapefile
+la_shp <- st_read("../data/Local_Authority_Districts_(May_2021)_UK_BFE_V3/LAD_MAY_2021_UK_BFE_V2.shp")
+
+str(la_shp)
+```
+
+## Computing mobility indicators
+
+```{r}
+# out-migration
+outflows <- df_long %>% 
+  group_by(OutLA) %>%
+   dplyr::summarise( n = sum(Moves, na.rm = T))
+
+# in-migration
+inflows <- df_long %>% 
+  group_by(InLA) %>%
+   dplyr::summarise( n = sum(Moves, na.rm = T))
+
+# net migration
+indicators <- full_join(outflows, 
+                        inflows,
+                        by = c("OutLA" = "InLA")) %>% 
+  mutate_if(is.numeric, ~replace(., is.na(.), 0)) %>% 
+  mutate_if(is.numeric, round) %>% 
+  rename(
+    outflows = n.x,
+    inflows = n.y
+  ) %>% 
+    mutate(
+  netflows = ((inflows) - (outflows))
+  ) 
+
+```
+
+
+## Joining spatial data
+
+```{r}
+la_shp <- left_join(la_shp, indicators, by = c("LAD21CD" = "OutLA"))
+```
+
+
+## Simplify boundaries
+
+```{r}
+# id for country name initial
+la_shp$ctry_nm <- substr(la_shp$LAD21CD, 1, 1)
+la_shp$ctry_nm <- as.factor(la_shp$ctry_nm)
+
+# simplify boundaries
+la_shp_simple <- st_simplify(la_shp, 
+                             preserveTopology =T,
+                             dTolerance = 1000) # 1km
+
+# ensure geometry is valid
+la_shp_simple <- sf::st_make_valid(la_shp_simple)
+```
+
+
+# Mapping
+
+```{r}
+la_shp_simple <- la_shp_simple %>% filter(ctry_nm=="E" | ctry_nm=="W")
+
+netm <- ggplot(data = la_shp_simple, aes(fill = netflows)) +
+  geom_sf(col = "gray90", size = 0.1) +
+  coord_sf() +
+  scale_fill_gradient2(low = "darkblue", 
+                       mid = "#ffffe0",
+                       #mid = scales::muted("purple"), 
+                       high = "darkred", 
+                       breaks = ) +
+  labs(title = "Net migration",
+       subtitle = "ONS 2020 estimates",
+       fill = "Count") +
+  theme_map()
+
+outm <- ggplot(data = la_shp_simple, aes(fill = outflows)) +
+  geom_sf(col = "gray90", size = 0.1) +
+  coord_sf() +
+  scale_fill_gradient2(low = "#ffffe0", 
+                       #mid = "blue",
+                       #mid = scales::muted("purple"), 
+                       high = "darkblue", 
+                       breaks = ) +
+  labs(title = "Out-migration",
+       #subtitle = "ONS 2020 estimates",
+       fill = "Count") +
+  theme_map() 
+
+
+inm <- ggplot(data = la_shp_simple, aes(fill = inflows)) +
+  geom_sf(col = "gray90", size = 0.1) +
+  coord_sf() +
+  scale_fill_gradient2(low = "#ffffe0", 
+                       #mid = "blue",
+                       #mid = scales::muted("purple"), 
+                       high = "darkred", 
+                       breaks = ) +
+  labs(title = "In-migration",
+       fill = "Count",
+       caption = "Graphic: Francisco Rowe (@fcorowe)") +
+  theme_map() 
+
+#png("migration_uk.png", units="in", width=15, height=8, res=300)
+netm + outm + inm
+#dev.off()
+```
+
+
+```{r eval=FALSE, include=FALSE}
+file.edit(
+  tint:::template_resources(
+    'tint', '..', 'skeleton', 'skeleton.Rmd'
+  )
+)
+```
+
+```{r bib, include=FALSE}
+# create a bib file for the R packages used in this document
+knitr::write_bib(c('base', 'rmarkdown'), file = 'skeleton.bib')
+```

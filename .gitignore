@@ -1,0 +1,7 @@
+# Mac DS file
+*.DS_Store
+
+#Ignore all files in a folder
+cloropleth/superseded/*
+correlations/resources/*
+Data/*

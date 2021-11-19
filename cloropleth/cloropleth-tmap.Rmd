@@ -1,0 +1,173 @@
+---
+title: "Choropleths Using tmap"
+author: "Francisco Rowe ([`@fcorowe`](http://twitter.com/fcorowe))"
+date: "`r Sys.Date()`"
+output: tint::tintHtml
+bibliography: skeleton.bib
+link-citations: yes
+---
+
+```{r setup, include=FALSE}
+library(tint)
+# handle spatial data
+library(sf)
+# manipulate data
+library(tidyverse)
+library(lubridate)
+# create maps
+library(tmap)
+# nice colour schemes
+library(viridis) 
+library(viridisLite)
+library(RColorBrewer)
+library(ggthemes)
+library(scico)
+library(patchwork)
+# invalidate cache when the package version changes
+knitr::opts_chunk$set(tidy = FALSE, cache.extra = packageVersion('tint'))
+options(htmltools.dir.version = FALSE)
+```
+
+
+# Choropleths
+
+# Data
+
+We will use [internal migration data](https://www.ons.gov.uk/peoplepopulationandcommunity/populationandmigration/migrationwithintheuk/datasets/internalmigrationbyoriginanddestinationlocalauthoritiessexandsingleyearofagedetailedestimatesdataset) from the Office for National Statistics (ONS) from the United Kingdom. 
+
+The original data are organised in a long format structure and are disaggregated by sex and age. Each row captures the count of people moving from an origin to a destination. The spatial units of analysis are local authorities (LA).
+
+```{r}
+# clean workspace
+rm(list=ls())
+
+# load data
+df_long <- read_csv("../data/internal_migration/Detailed_Estimates_2020_LA_2021_Dataset_1.csv")
+
+# id for origins and destinations
+orig_la_nm <- as.data.frame(unique(df_long$OutLA))
+dest_la_nm <- as.data.frame(unique(df_long$InLA))
+
+head(df_long)
+```
+We also read our LA boundaries and analyse the structure of the data. We use open data from the ONS's Geography portal. We use the [Local Authority Districts Boundaries (May 2021) UK BFE](https://geoportal.statistics.gov.uk/datasets/ons::local-authority-districts-may-2021-uk-bfe/about)
+
+```{r}
+# read shapefile
+la_shp <- st_read("../data/Local_Authority_Districts_(May_2021)_UK_BFE_V3/LAD_MAY_2021_UK_BFE_V2.shp")
+
+str(la_shp)
+```
+
+## Computing mobility indicators
+
+```{r}
+# out-migration
+outflows <- df_long %>% 
+  group_by(OutLA) %>%
+   dplyr::summarise( n = sum(Moves, na.rm = T))
+
+# in-migration
+inflows <- df_long %>% 
+  group_by(InLA) %>%
+   dplyr::summarise( n = sum(Moves, na.rm = T))
+
+# net migration
+indicators <- full_join(outflows, 
+                        inflows,
+                        by = c("OutLA" = "InLA")) %>% 
+  mutate_if(is.numeric, ~replace(., is.na(.), 0)) %>% 
+  mutate_if(is.numeric, round) %>% 
+  rename(
+    outflows = n.x,
+    inflows = n.y
+  ) %>% 
+    mutate(
+  netflows = ((inflows) - (outflows))
+  ) 
+
+```
+
+
+## Joining spatial data
+
+```{r}
+la_shp <- left_join(la_shp, indicators, by = c("LAD21CD" = "OutLA"))
+```
+
+
+## Simplify boundaries
+
+```{r}
+# id for country name initial
+la_shp$ctry_nm <- substr(la_shp$LAD21CD, 1, 1)
+la_shp$ctry_nm <- as.factor(la_shp$ctry_nm)
+
+# simplify boundaries
+la_shp_simple <- st_simplify(la_shp, 
+                             preserveTopology =T,
+                             dTolerance = 1000) # 1km
+
+# ensure geometry is valid
+la_shp_simple <- sf::st_make_valid(la_shp_simple)
+```
+
+
+# Mapping
+
+```{r}
+la_shp_simple <- la_shp_simple %>% filter(ctry_nm=="E" | ctry_nm=="W")
+
+div_pal <- c('#00429d', '#73a2c6', '#ffffe0', '#f4777f', '#93003a')
+seq1_pal <- c('#ffffe0', '#4771b2', '#73a2c6', '#a5d5d8', '#00429d')
+seq2_pal <- c('#ffffe0', '#ffbcaf', '#f4777f', '#cf3759', '#93003a')
+
+netm <- tm_shape(la_shp_simple) +
+  tm_fill(col = "netflows", 
+          style = "sd", 
+          #palette = "-RdBu", 
+          palette = div_pal,
+          title = "Net migration", 
+          legend.hist = F) +
+  tm_borders(lwd = 0) +
+  tm_layout(legend.title.size = 1,
+          legend.text.size = 0.6,
+          #legend.position = c("right","top"),
+          legend.bg.color = "white",
+          legend.outside = F,
+          legend.bg.alpha = 1)
+
+outm <- tm_shape(la_shp_simple) +
+  tm_fill(col = "outflows", 
+          style = "sd", 
+          palette = seq1_pal, 
+          title = "Out-migration",
+          legend.hist = F) +
+  tm_borders(lwd = 0) +
+  tm_layout(legend.title.size = 1,
+          legend.text.size = 0.6,
+          legend.bg.color = "white",
+          legend.outside = F,
+          legend.bg.alpha = 1)
+
+inm <- tm_shape(la_shp_simple) +
+  tm_fill(col = "inflows", 
+          style = "sd",
+          palette = seq2_pal, 
+          title = "In-migration",
+          legend.hist = F) +
+  tm_borders(lwd = 0) +
+  tm_layout(legend.title.size = 1,
+          legend.text.size = 0.6,
+          legend.bg.color = "white",
+          legend.outside = F,
+          legend.bg.alpha = 1)
+
+tmap_arrange(netm, outm, inm, 
+                     ncol = 3)
+
+#maps <- tmap_arrange(netm, outm, inm, 
+#                     ncol = 3)
+
+#tmap_save(tm = maps, filename = "migration_map.png", dpi = 300)
+```

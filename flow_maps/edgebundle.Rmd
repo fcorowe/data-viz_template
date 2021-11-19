@@ -1,0 +1,114 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+#install.packages("remotes")
+#install.packages("edgebundle")
+#library(reticulate)
+#datashader <- import("datashader")
+#py_install("datashader")
+```
+
+```{r}
+library(edgebundle)
+library(igraph)
+g <- graph_from_edgelist(
+  matrix(c(1,12,2,11,3,10,4,9,5,8,6,7),ncol=2,byrow = T),F)
+xy <- cbind(c(rep(0,6),rep(1,6)),c(1:6,1:6))
+
+fbundle <- edge_bundle_force(g,xy,compatibility_threshold = 0.1)
+head(fbundle)
+```
+
+
+```{r}
+library(ggplot2)
+
+ggplot(fbundle)+
+  geom_path(aes(x,y,group=group,col=as.factor(group)),
+            size = 2,show.legend = FALSE)+
+  geom_point(data=as.data.frame(xy),aes(V1,V2),size=5)+
+  theme_void()
+```
+
+```{r}
+library(ggforce)
+g <- graph.star(10,"undirected")
+
+xy <- matrix(c(
+  0,0,
+  cos(90*pi/180),sin(90*pi/180),
+  cos(80*pi/180),sin(80*pi/180),
+  cos(70*pi/180),sin(70*pi/180),
+  cos(330*pi/180),sin(330*pi/180),
+  cos(320*pi/180),sin(320*pi/180),
+  cos(310*pi/180),sin(310*pi/180),
+  cos(210*pi/180),sin(210*pi/180),
+  cos(200*pi/180),sin(200*pi/180),
+  cos(190*pi/180),sin(190*pi/180)
+),ncol=2,byrow=TRUE)
+
+sbundle <- edge_bundle_stub(g,xy,beta = 90)
+
+ggplot(sbundle)+
+  geom_bezier(aes(x,y,group=group),size=2,col="grey66")+
+  geom_point(data=as.data.frame(xy),aes(V1,V2),size=5)+
+  theme_void()
+```
+
+
+```{r}
+g <- us_flights
+xy <- cbind(V(g)$longitude,V(g)$latitude)
+verts <- data.frame(x=V(g)$longitude,y=V(g)$latitude)
+fbundle <- edge_bundle_force(g,xy,compatibility_threshold = 0.6)
+sbundle <- edge_bundle_stub(g,xy)
+hbundle <- edge_bundle_hammer(g, xy, bw = 0.7,decay = 0.5)
+
+states <- map_data("state")
+
+
+p1 <- ggplot()+
+  geom_polygon(data=states,aes(long,lat,group=group),col="white",size=0.1,fill=NA)+
+  geom_path(data = fbundle,aes(x,y,group=group),col="#9d0191",size=0.05)+
+  geom_path(data = fbundle,aes(x,y,group=group),col="white",size=0.005)+
+  geom_point(data = verts,aes(x,y),col="#9d0191",size=0.25)+
+  geom_point(data = verts,aes(x,y),col="white",size=0.25,alpha=0.5)+
+  geom_point(data=verts[verts$name!="",],aes(x,y), col="white", size=3,alpha=1)+
+  labs(title="Force Directed Edge Bundling")+
+  ggraph::theme_graph(background = "black")+
+  theme(plot.title = element_text(color="white"))
+
+p2 <- ggplot()+
+  geom_polygon(data=states,aes(long,lat,group=group),col="white",size=0.1,fill=NA)+
+  geom_path(data = hbundle,aes(x,y,group=group),col="#9d0191",size=0.05)+
+  geom_path(data = hbundle,aes(x,y,group=group),col="white",size=0.005)+
+  geom_point(data = verts,aes(x,y),col="#9d0191",size=0.25)+
+  geom_point(data = verts,aes(x,y),col="white",size=0.25,alpha=0.5)+
+  geom_point(data=verts[verts$name!="",],aes(x,y), col="white", size=3,alpha=1)+
+  labs(title="Hammer Edge Bundling")+
+  ggraph::theme_graph(background = "black")+
+  theme(plot.title = element_text(color="white"))
+
+alpha_fct <- function(x,b=0.01,p=5,n=20){
+  (1-b)*(2/(n-1))^p * abs(x-(n-1)/2)^p+b
+}
+
+p3 <- ggplot()+
+  geom_polygon(data=states,aes(long,lat,group=group),col="white",size=0.1,fill=NA)+
+  ggforce::geom_bezier(data = sbundle,aes(x,y,group=group,alpha=alpha_fct(..index..*20)),n=20,col="#9d0191",size=0.1,show.legend = FALSE)+
+  ggforce::geom_bezier(data = sbundle,aes(x,y,group=group,alpha=alpha_fct(..index..*20)),n=20,col="white",size=0.01,show.legend = FALSE)+
+  geom_point(data = verts,aes(x,y),col="#9d0191",size=0.25)+
+  geom_point(data = verts,aes(x,y),col="white",size=0.25,alpha=0.5)+
+  geom_point(data=verts[verts$name!="",],aes(x,y), col="white", size=3,alpha=1)+
+  labs(title="Stub Edge Bundling")+
+  ggraph::theme_graph(background = "black")+
+  theme(plot.title = element_text(color="white"))
+```
+
+
+
+
+
